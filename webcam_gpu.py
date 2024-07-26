@@ -105,7 +105,7 @@ capture_button = Button(control_frame, text="Save Image", command=save_image)
 capture_button.grid(row=2, column=0, padx=5, pady=5)
 
 # 캡쳐보드 인식
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
 
 update_frame()
 root.mainloop()
