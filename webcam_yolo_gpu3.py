@@ -68,7 +68,7 @@ def yolo_obj_draw(img, threshold=0.3):
 
 
 def update_frame():
-    global capture_image, processed_image
+    global capture_image, preprocessed_image
     ret, frame = cap.read()
     if ret:
         capture_image = frame.copy()
@@ -89,22 +89,24 @@ def update_frame():
 def load_model():
     global model, model_names
     selected_model = model_combobox.get()
-    if selected_model:
+    if selected_model and selected_model != "normal":
         model_path = os.path.join(model_dir, selected_model)
         model = YOLO(model_path)
         model.to(device)  # Ensure the model uses GPU
         model_names = model.names
         messagebox.showinfo("Model Loaded", f"{selected_model} 모델을 불러왔습니다")
     else:
-        messagebox.showwarning("No Model Selected", "모델을 선택해 주세요")
+        model = None
+        model_names = None
+        messagebox.showinfo("Model Unloaded", "YOLO 모델이 실행되지 않습니다.")
 
 
 def save_image():
-    global capture_image, processed_image
+    global capture_image, preprocessed_image
     count = len(os.listdir(save_dir)) + 1
-    if processed_image is not None:
+    if model is not None and preprocessed_image is not None:
         filename = os.path.join(save_dir, f"capture_{count:03d}.jpg")
-        cv2.imwrite(filename, processed_image)
+        cv2.imwrite(filename, preprocessed_image)
         print(f"Image saved: {filename}")
     elif capture_image is not None:
         filename = os.path.join(save_dir, f"webcam_{count:03d}.jpg")
@@ -154,7 +156,7 @@ def find_cameras():
 
 
 # 모델 파일 리스트 가져오기
-model_files = [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
+model_files = ["normal"] + [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
 available_cameras = find_cameras()
 
 # GUI 생성
@@ -171,14 +173,15 @@ capture_label.pack(side=tk.LEFT)
 init_control_frame = tk.Frame(root)
 init_control_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=10)
 
+Label(init_control_frame, text="사용할 웹캠을 선택한 후 start를 누르세요").grid(row=0, column=0, padx=5, pady=5)
 cam_combobox = ttk.Combobox(init_control_frame, values=available_cameras)
-cam_combobox.grid(row=0, column=0, padx=5, pady=5)
+cam_combobox.grid(row=1, column=0, padx=5, pady=5)
 
 start_button = Button(init_control_frame, text="Start", command=lambda: [init_control_frame.pack_forget(),
                                                                          control_frame.pack(side=tk.BOTTOM, fill=tk.X,
                                                                                             padx=10, pady=10),
                                                                          start_webcam()])
-start_button.grid(row=1, column=0, padx=5, pady=5)
+start_button.grid(row=2, column=0, padx=5, pady=5)
 
 control_frame = tk.Frame(root)
 
@@ -194,8 +197,7 @@ preprocessing_method = ttk.Combobox(control_frame, values=['normal', 'hsv', 'ret
 preprocessing_method.grid(row=3, column=0, padx=5, pady=5)
 preprocessing_method.current(0)
 
-capture_button = Button(control_frame, text="Save Image", command=save_image)
-capture_button.grid(row=4, column=0, padx=5, pady=5)
+Label(control_frame, text="Enter 키를 누르면 사진이 저장됩니다").grid(row=4, column=0, padx=5, pady=5)
 
 stop_button = Button(control_frame, text="Stop", command=stop_webcam)
 stop_button.grid(row=5, column=0, padx=5, pady=5)
