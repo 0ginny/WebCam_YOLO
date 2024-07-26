@@ -8,7 +8,7 @@ from ultralytics import YOLO
 import torch
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print(device)
+messagebox.showinfo("device info", f"{device} 로 작동중 입니다.")
 
 # 전역 변수 초기화
 model = None
