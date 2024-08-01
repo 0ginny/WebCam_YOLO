@@ -247,16 +247,18 @@ def finish_inspection():
 
 def key_event(event):
     print(f'Key pressed: {event.keysym} (keycode: {event.keycode})')
-    if event.keysym in ['Return', 'KP_Enter']:  # Enter and KP_Enter
-        print("Enter or KP_Enter pressed")
+    if event.keysym in ['asterisk']:  # asterisk for KP_Multiply
+        print("Asterisk (*) pressed (Enter functionality)")
         capture_frame()
         save_image()
-    elif event.keysym in ['KP_Add', 'plus']:  # KP_Add
-        print("KP_Add or plus pressed")
+    elif event.keysym in ['plus']:  # plus
+        print("Plus (+) pressed")
         start_inspection()
-    elif event.keysym in ['KP_Subtract', 'minus']:  # KP_Subtract
-        print("KP_Subtract or minus pressed")
+    elif event.keysym in ['minus']:  # minus
+        print("Minus (-) pressed")
         finish_inspection()
+    if event.keysym == '5':
+        event.widget.invoke()
 
 # 모델 파일 리스트 가져오기
 model_files = ["normal"] + [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
@@ -267,12 +269,10 @@ product_codes = ["PCBA", "PCBB", "PCBC", "PCBD", "PCBE"]
 # GUI 생성
 root = tk.Tk()
 root.title("YOLO Webcam GUI")
-root.bind('<Return>', key_event)
-root.bind('<KP_Enter>', key_event)
-root.bind('<KP_Add>', key_event)
-root.bind('<KP_Subtract>', key_event)
-root.bind('<minus>', key_event)
-root.bind('<plus>', key_event)
+root.bind('<asterisk>', key_event)  # Bind asterisk for Enter functionality
+root.bind('<plus>', key_event)  # Bind plus for KP_Add
+root.bind('<minus>', key_event)  # Bind minus for KP_Subtract
+root.bind('<KeyPress-5>', key_event)
 
 webcam_label = Label(root)
 webcam_label.pack(side=tk.LEFT)
@@ -292,6 +292,8 @@ start_button = Button(init_control_frame, text="Start", command=lambda: [init_co
                                                                                             padx=10, pady=10),
                                                                          start_webcam()])
 start_button.grid(row=2, column=0, padx=5, pady=5)
+# start_button.bind('<KeyPress-5>', key_event)
+
 
 control_frame = tk.Frame(root)
 
@@ -300,6 +302,7 @@ model_combobox.grid(row=0, column=0, padx=5, pady=5)
 
 load_button = Button(control_frame, text="Load Model", command=load_model)
 load_button.grid(row=1, column=0, padx=5, pady=5)
+# load_button.bind('<KeyPress-5>', key_event)
 
 # 전처리 방법 선택
 Label(control_frame, text="전처리 방법을 선택하세요").grid(row=2, column=0, padx=5, pady=5)
@@ -320,6 +323,7 @@ Label(control_frame, text="- 키를 누르면, 검사가 종료됩니다").grid(
 
 stop_button = Button(control_frame, text="Stop", command=stop_webcam)
 stop_button.grid(row=10, column=0, padx=5, pady=5)
+# stop_button.bind('<KeyPress-5>', key_event)
 
 root.mainloop()
 
