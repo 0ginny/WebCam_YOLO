@@ -121,7 +121,9 @@ def generate_product_id(product_code):
     cursor.close()
 
     if max_id:
-        new_id_num = int(max_id[-4:]) + 1
+        # max_id에서 숫자 부분만 추출하여 정수로 변환
+        number_part = max_id[len(product_code):]
+        new_id_num = int(number_part) + 1
     else:
         new_id_num = 1
 
@@ -187,7 +189,7 @@ def capture_frame():
             cursor = conn.cursor()
             for data in boxinfos:
                 x1, y1, x2, y2 = map(int, data[:4])
-                classid = int(data[5])
+                classid = str(int(data[5])).zfill(2)  # classid를 VARCHAR(2) 형식으로 변환
                 width = x2 - x1
                 height = y2 - y1
                 cursor.execute("INSERT INTO INSPECT_STATE (PRODUCT_ID, ERROR_TYPE, WIDTH, HEIGHT) VALUES (:1, :2, :3, :4)",
@@ -197,6 +199,21 @@ def capture_frame():
             messagebox.showinfo("Capture Frame", "Captured frame processed and saved.")
         else:
             messagebox.showwarning("Capture Error", "No detection or Product ID is missing.")
+
+
+def save_image():
+    global capture_image, preprocessed_image
+    count = len(os.listdir(save_dir)) + 1
+    if model is not None and preprocessed_image is not None:
+        filename = os.path.join(save_dir, f"capture_{count:03d}.jpg")
+        cv2.imwrite(filename, preprocessed_image)
+        print(f"Image saved: {filename}")
+    elif capture_image is not None:
+        filename = os.path.join(save_dir, f"webcam_{count:03d}.jpg")
+        cv2.imwrite(filename, capture_image)
+        print(f"Image saved: {filename}")
+    else:
+        messagebox.showwarning("No Image Captured", "캡처된 이미지가 없습니다")
 
 def finish_inspection():
     cursor = conn.cursor()
@@ -213,11 +230,13 @@ def finish_inspection():
 def key_event(event):
     if event.keysym == 'Return':
         capture_frame()
+        save_image()
 
 # 모델 파일 리스트 가져오기
 model_files = ["normal"] + [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
 available_cameras = find_cameras()
-product_codes = ["PCB001", "PCB002", "PCB003", "PCB004", "PCB005"]
+
+product_codes = ["PCBA", "PCBB", "PCBC", "PCBD", "PCBE"]
 
 # GUI 생성
 root = tk.Tk()
