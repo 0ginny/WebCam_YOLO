@@ -192,9 +192,9 @@ def start_inspection():
         messagebox.showwarning("Input Error", "Please select a Product Code.")
 
 def capture_frame():
-    global capture_image
-    if capture_image is not None:
-        detection = model(capture_image)[0]
+    global preprocessed_image
+    if preprocessed_image is not None:
+        detection = model(preprocessed_image)[0]
         boxinfos = detection.boxes.data.tolist()
         product_id = product_id_entry.get()
         if product_id and boxinfos:
