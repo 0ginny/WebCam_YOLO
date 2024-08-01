@@ -21,6 +21,8 @@ processed_image = None
 save_dir = "./save_img"
 model_dir = "./src/yolo_model"
 cap = None
+last_product_id = None
+inspection_started = False  # 검사 시작 여부 추적
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
@@ -121,7 +123,6 @@ def generate_product_id(product_code):
     cursor.close()
 
     if max_id:
-        # max_id에서 숫자 부분만 추출하여 정수로 변환
         number_part = max_id[len(product_code):]
         new_id_num = int(number_part) + 1
     else:
@@ -160,11 +161,19 @@ def find_cameras():
         index += 1
     return arr
 
+
 def start_inspection():
-    global product_id_entry
+    global product_id_entry, last_product_id, inspection_started
+    if inspection_started:
+        messagebox.showwarning("Inspection Error", "검사 종료 한 후에 검사를 시작해주세요.")
+        return
+
     product_code = product_code_combobox.get()
     if product_code:
         product_id = generate_product_id(product_code)
+        if last_product_id == product_id:
+            product_id = generate_product_id(product_code)  # Ensure new product_id if same as last_product_id
+
         product_id_entry.config(state='normal')
         product_id_entry.delete(0, tk.END)
         product_id_entry.insert(0, product_id)
@@ -175,6 +184,9 @@ def start_inspection():
                        (product_id, datetime.datetime.now()))
         conn.commit()
         cursor.close()
+
+        last_product_id = product_id
+        inspection_started = True
         messagebox.showinfo("Start Inspection", f"Product ID {product_id} inspection started.")
     else:
         messagebox.showwarning("Input Error", "Please select a Product Code.")
@@ -215,15 +227,21 @@ def save_image():
     else:
         messagebox.showwarning("No Image Captured", "캡처된 이미지가 없습니다")
 
+
 def finish_inspection():
+    global last_product_id, inspection_started
     cursor = conn.cursor()
     product_id = product_id_entry.get()
     if product_id:
-        cursor.execute("UPDATE PRODUCT_STATE SET INSPECTION_COMPLETE_TIME = :1, IS_DEFECT = (SELECT CASE WHEN EXISTS (SELECT 1 FROM INSPECT_STATE WHERE PRODUCT_ID = :2) THEN 1 ELSE 0 END FROM DUAL) WHERE PRODUCT_ID = :2",
-                       (datetime.datetime.now(), product_id))
+        cursor.execute(
+            "UPDATE PRODUCT_STATE SET INSPECTION_COMPLETE_TIME = :1, IS_DEFECT = (SELECT CASE WHEN EXISTS (SELECT 1 FROM INSPECT_STATE WHERE PRODUCT_ID = :2) THEN 1 ELSE 0 END FROM DUAL) WHERE PRODUCT_ID = :2",
+            (datetime.datetime.now(), product_id))
         conn.commit()
         cursor.close()
-        messagebox.showinfo("Finish Inspection", f"Product ID {product_id} inspection finished.")
+        messagebox.showinfo("Inspect Finish", f"Product ID {product_id} inspection finished.")
+
+        last_product_id = None  # FINISH 이후 새로 START 시 새로운 PRODUCT_ID 발행을 위해 초기화
+        inspection_started = False  # 검사 종료 후 다시 검사 시작 가능하도록 설정
     else:
         messagebox.showwarning("Input Error", "Please enter a Product ID.")
 
