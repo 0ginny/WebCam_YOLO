@@ -68,8 +68,8 @@ def apply_preprocessing(image, method):
     else:
         return image
 
-def yolo_obj_draw(img, threshold=0.3):
-    detection = model(img)[0]
+def yolo_obj_draw(draw_img,processed_img, threshold=0.3):
+    detection = model(processed_img)[0]
     boxinfos = detection.boxes.data.tolist()
 
     for data in boxinfos:
@@ -79,21 +79,21 @@ def yolo_obj_draw(img, threshold=0.3):
         name = model_names[classid]
         if confidence_score > threshold:
             model_text = f'{name}_{confidence_score}'
-            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 3)
-            cv2.putText(img, text=model_text, org=(x1, y1 - 10),
+            cv2.rectangle(draw_img, (x1, y1), (x2, y2), (0, 255, 0), 3)
+            cv2.putText(draw_img, text=model_text, org=(x1, y1 - 10),
                         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                         fontScale=0.9, color=(255, 0, 0), thickness=2)
 
 def update_frame():
-    global capture_image, preprocessed_image
+    global capture_image, preprocessed_image, processed_image
     ret, frame = cap.read()
     if ret:
         capture_image = frame.copy()
         if model is not None:
             processed_image = capture_image.copy()
             preprocessed_image = apply_preprocessing(processed_image, preprocessing_method.get())
-            yolo_obj_draw(preprocessed_image, threshold=0.2)
-            image = cv2.cvtColor(preprocessed_image, cv2.COLOR_BGR2RGB)
+            yolo_obj_draw(processed_image, preprocessed_image, threshold=0.2)
+            image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
         else:
             image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = Image.fromarray(image)
@@ -214,11 +214,11 @@ def capture_frame():
 
 
 def save_image():
-    global capture_image, preprocessed_image
+    global capture_image, processed_image
     count = len(os.listdir(save_dir)) + 1
-    if model is not None and preprocessed_image is not None:
+    if model is not None and processed_image is not None:
         filename = os.path.join(save_dir, f"capture_{count:03d}.jpg")
-        cv2.imwrite(filename, preprocessed_image)
+        cv2.imwrite(filename, processed_image)
         print(f"Image saved: {filename}")
     elif capture_image is not None:
         filename = os.path.join(save_dir, f"webcam_{count:03d}.jpg")
