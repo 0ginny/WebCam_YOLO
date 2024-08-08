@@ -23,9 +23,18 @@ model_dir = "./src/yolo_model"
 cap = None
 last_product_id = None
 inspection_started = False  # 검사 시작 여부 추적
+error_types = ['PATTERN','INK','AU','SCRATCH']
+error_paths= []
+
 
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
+
+for error_type in error_types:
+    error_path = os.path.join(save_dir,error_type)
+    error_paths.append(error_path)
+    if not os.path.exists(error_path):
+        os.makedirs(error_path)
 
 load_path = './connections/KTLT_AWS.json'
 with open(load_path, 'r') as file:
@@ -47,6 +56,10 @@ connect_to_db()
 def color_space_converted_save(image):
     return cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
+def increase_brightness(image, beta= 50):
+    """이미지의 밝기를 증가시킵니다."""
+    return cv2.convertScaleAbs(image, alpha=1.0, beta=beta)
+
 def single_scale_retinex(image, sigma=30):
     def ssr(img, sigma):
         retinex = np.log10(img + 1) - np.log10(cv2.GaussianBlur(img, (0, 0), sigma) + 1)
@@ -65,6 +78,10 @@ def apply_preprocessing(image, method):
         return color_space_converted_save(image)
     elif method == 'retinex':
         return single_scale_retinex(image)
+    elif method == 'bright50' :
+        return increase_brightness(image)
+    elif method == 'bright70' :
+        return increase_brightness(image,70)
     else:
         return image
 
@@ -290,7 +307,7 @@ load_button.grid(row=1, column=0, padx=5, pady=5)
 
 # 전처리 방법 선택
 Label(control_frame, text="전처리 방법을 선택하세요").grid(row=2, column=0, padx=5, pady=5)
-preprocessing_method = ttk.Combobox(control_frame, values=['normal', 'hsv', 'retinex'])
+preprocessing_method = ttk.Combobox(control_frame, values=['normal', 'hsv', 'retinex','bright50', 'bright70'])
 preprocessing_method.grid(row=3, column=0, padx=5, pady=5)
 preprocessing_method.current(0)
 
