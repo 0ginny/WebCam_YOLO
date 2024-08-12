@@ -53,6 +53,35 @@ def connect_to_db():
 
 connect_to_db()
 
+def get_list_from_db(table_name:str, column_name:str, colunm_index:int)->list:
+    '''
+    db에서 칼럼을 리스트로 반환
+
+    :param table_name: db 테이블명 (str)
+    :param column_name: 목표 칼럼명 (str)
+    :param colunm_index: 테이블에서 목표 칼럼 인덱스(0~)
+    :param target_list: 변환할 list
+    :return: list
+    '''
+    target_list = []
+    try:
+        # 커서 생성
+        cursor = conn.cursor()
+        # SQL 쿼리 실행
+        cursor.execute(f"SELECT {column_name} FROM {table_name}")
+        # 결과 가져오기
+        result = cursor.fetchall()
+        # 리스트 초기화 및 생성
+        target_list = [row[colunm_index] for row in result]
+
+    except cx_Oracle.DatabaseError as e:
+        print(f"{table_name} 테이블에 에러가 발생했습니다: {e}")
+
+    finally:
+        # 커서와 연결 종료
+        cursor.close()
+    return target_list
+
 def color_space_converted_save(image):
     return cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
@@ -271,7 +300,9 @@ def key_event(event):
 model_files = ["normal"] + [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
 available_cameras = find_cameras()
 
-product_codes = ["PCBA", "PCBB", "PCBC", "PCBD", "PCBE"]
+
+product_codes = get_list_from_db("PCB_Product", "pcb_type", 0)
+print(product_codes)
 
 # GUI 생성
 root = tk.Tk()
