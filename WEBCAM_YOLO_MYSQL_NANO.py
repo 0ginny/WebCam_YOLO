@@ -9,8 +9,8 @@ import torch
 import mysql.connector
 import datetime
 import json
-from datetime import datetime
 import time
+from collections import defaultdict
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 messagebox.showinfo("device info", f"{device} 로 작동중 입니다.")
@@ -214,30 +214,121 @@ def capture_frame():
         detection = model(preprocessed_image)[0]
         boxinfos = detection.boxes.data.tolist()
         product_id = product_id_entry.get()
+
         if product_id and boxinfos:
+            # 1. PROCESSING_STATE 테이블에 처음 불량이 감지되었을 경우 삽입
             cursor = conn.cursor()
-            for data in boxinfos:
-                x1, y1, x2, y2 = map(int, data[:4])
-                classid = str(int(data[5])).zfill(2)  # classid를 VARCHAR(2) 형식으로 변환
-                width = x2 - x1
-                height = y2 - y1
-                cursor.execute("INSERT INTO INSPECT_STATE (PRODUCT_ID, ERROR_TYPE, WIDTH, HEIGHT) VALUES (%s, %s, %s, %s)",
-                               (product_id, classid, width, height))
-            conn.commit()
+            cursor.execute("SELECT COUNT(*) FROM PROCESSING_STATE WHERE PRODUCT_ID = %s", (product_id,))
+            count = cursor.fetchone()[0]
+
+            if count == 0:  # 처음 불량이 감지된 경우만 삽입
+                process_id = generate_process_id(product_id)  # 고유 process_id 생성
+                cursor.execute(
+                    "INSERT INTO PROCESSING_STATE (PROCESS_ID, PRODUCT_ID, PROCESS_STATE) VALUES (%s, %s, %s)",
+                    (process_id, product_id, 0)
+                )
+                conn.commit()
+
             cursor.close()
+
+            # 이미지 저장 및 관련 데이터 삽입은 save_image 함수에서 처리
+            save_image()
+
             messagebox.showinfo("Capture Frame", "Captured frame processed and saved.")
         else:
             messagebox.showwarning("Capture Error", "No detection or Product ID is missing.")
 
+
+def generate_process_id(product_id):
+    """product_id에 'PCS'를 붙여 process_id를 생성합니다."""
+    return f"PCS{product_id}"
+
+def generate_image_id(product_id):
+    """product_id에 현재 이미지 번호를 붙여 image_id를 생성합니다."""
+    cursor = conn.cursor()
+    # 현재 해당 product_id로 저장된 이미지 개수를 세어서 이미지 번호를 생성
+    cursor.execute("SELECT COUNT(*) FROM IMAGE_LABEL WHERE PRODUCT_ID = %s", (product_id,))
+    image_count = cursor.fetchone()[0] + 1  # 현재 이미지 개수 + 1
+    cursor.close()
+    return f"{product_id}_{image_count:03d}"  # image_id 형식: product_id_001, product_id_002 ...
+
+
 def save_image():
-    global capture_image, processed_image
-    count = len(os.listdir(save_dir)) + 1
+    global capture_image, processed_image, preprocessed_image
+
+    # 현재 날짜와 시간을 가져옴
+    current_time = datetime.datetime.now()
+    year = current_time.strftime("%Y")
+    month = current_time.strftime("%m")
+    clock_time = time.strftime("%H%M%S")  # 시간을 HHMMSS 형식으로 저장
+
     if model is not None and processed_image is not None:
-        filename = os.path.join(save_dir, f"capture_{count:03d}.jpg")
-        cv2.imwrite(filename, processed_image)
-        print(f"Image saved: {filename}")
+        detection = model(preprocessed_image)[0]
+        boxinfos = detection.boxes.data.tolist()
+
+        if boxinfos:  # 만약 YOLO 객체가 감지되었다면
+            product_id = product_id_entry.get()  # product_id 가져오기
+            image_ids = {}  # 각 클래스별로 하나의 image_id만 생성하기 위해 사용
+            image_paths = {}  # 각 클래스별로 하나의 경로만 생성하기 위해 사용
+
+            for data in boxinfos:
+                x1, y1, x2, y2 = map(int, data[:4])
+                classid = int(data[5])
+                name = model_names[classid]  # YOLO 객체 이름
+                first_letter = name[0].upper()  # 객체 이름의 첫 글자 대문자
+
+                # 전처리 방법의 첫 글자 대문자
+                preprocessing_method_initial = preprocessing_method.get()[0].upper()
+
+                # 해당 클래스에 대해 이미지가 이미 저장되었는지 확인
+                if classid not in image_ids:
+                    # 파일명 구성
+                    filename = f"E-{first_letter}-{preprocessing_method_initial}-{year}-{month}-{clock_time}.JPG"
+
+                    # 객체별 폴더 경로
+                    folder_path = os.path.join(save_dir, name)
+                    if not os.path.exists(folder_path):
+                        os.makedirs(folder_path)  # 폴더가 없으면 생성
+
+                    # 이미지 저장 경로
+                    file_path = os.path.join(folder_path, filename)
+
+                    # 이미지 저장
+                    cv2.imwrite(file_path, processed_image)
+                    print(f"Image saved: {file_path}")
+
+                    # IMAGE_LABEL 테이블에 데이터 저장
+                    image_id = generate_image_id(product_id)  # 고유 image_id 생성
+                    image_ids[classid] = image_id  # 해당 classid에 대한 image_id 저장
+                    image_paths[classid] = file_path  # 해당 classid에 대한 파일 경로 저장
+
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO IMAGE_LABEL (IMAGE_ID, PRODUCT_ID, SAVE_PATH) VALUES (%s, %s, %s)",
+                        (image_id, product_id, file_path)
+                    )
+                    conn.commit()
+                    cursor.close()
+
+                # 이후 INSPECT_STATE 테이블에 데이터 저장
+                width = x2 - x1
+                height = y2 - y1
+                error_type = str(classid).zfill(2)  # YOLO 인덱스를 00, 01 형식으로 변환
+                image_id = image_ids[classid]  # 해당 classid에 대한 image_id를 사용
+
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO INSPECT_STATE (ERROR_TYPE, WIDTH, HEIGHT, IMAGE_ID) VALUES (%s, %s, %s, %s)",
+                    (error_type, width, height, image_id)
+                )
+                conn.commit()
+                cursor.close()
+
+        else:
+            messagebox.showwarning("No Objects Detected", "YOLO 모델이 감지한 객체가 없습니다.")
     elif capture_image is not None:
-        filename = os.path.join(save_dir, f"webcam_{count:03d}.jpg")
+        # YOLO 객체가 감지되지 않았을 때의 이미지 저장
+        filename = os.path.join(save_dir, f"webcam_{clock_time}.jpg")
         cv2.imwrite(filename, capture_image)
         print(f"Image saved: {filename}")
     else:
@@ -265,7 +356,7 @@ def key_event(event):
     if event.keysym in ['asterisk']:  # asterisk for KP_Multiply
         print("Asterisk (*) pressed (Enter functionality)")
         capture_frame()
-        save_image()
+        # save_image()
     elif event.keysym in ['plus']:  # plus
         print("Plus (+) pressed")
         start_inspection()
